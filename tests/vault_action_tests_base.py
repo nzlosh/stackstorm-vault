@@ -1,6 +1,6 @@
 from st2tests.base import BaseActionTestCase
 
-from tests.utils import get_config_file_path
+# #from tests.utils import get_config_file_path
 from tests.utils.hvac_integration_test_case import HvacIntegrationTestCase
 
 
@@ -59,9 +59,12 @@ class VaultActionTestCase(HvacIntegrationTestCase, BaseActionTestCase):
 
     def build_dummy_pack_config(self, url="https://localhost:8200"):
         # based on create_client() in hvac/tests/utils/__init__.py
-        server_cert_path = get_config_file_path("server-cert.pem")
+        # CI/CD only has a self-signed cert.
+        # #server_cert_path = get_config_file_path("server-cert.pem")
+        server_cert_path = False
 
         token_result = self.client.auth.token.create(ttl=self.default_token_lease)
+        print(f"token_result: {token_result}")
         token = token_result["auth"]["client_token"]
 
         dummy_pack_config = {

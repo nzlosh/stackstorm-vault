@@ -1,0 +1,59 @@
+#!/bin/bash
+
+set -eux
+
+# Installing consul and vault in the CI/CD environment is complex.  That
+# complexity is now wrapped inside this shell script for a clearer CI/CD YAML.
+
+VAULT_VERSION="$1"
+CONSUL_VERSION="$2"
+
+# Get the hashicorp public signing key for the APT repo.
+wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/hashicorp.gpg
+
+# Configure the APT source list to trust the signing key
+sudo tee /etc/apt/sources.list.d/hashicorp.list <<<"deb [arch=amd64, signed-by=/etc/apt/trusted.gpg.d/hashicorp.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+
+# Update the package list
+sudo apt update -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" -o Dir::Etc::sourcelist="sources.list.d/hashicorp.list"
+
+# Install Vault and Consul
+#~ sudo apt install consul=${CONSUL_VERSION} vault=${VAULT_VERSION}
+sudo apt install vault=${VAULT_VERSION}
+
+# We disble cap_ipc_lock here as its generally incompatabile with GitHub Actions' runtime environments.
+sudo setcap cap_ipc_lock= /usr/bin/vault
+
+#~ # Consul needs to be explicitly configured to start in the CI/CD environment.
+#~ sudo mkdir -p /srv/consul && sudo chown -R consul:consul /srv/consul
+
+#~ sudo tee /etc/consul.d/consul.hcl >/dev/null <<EOF
+#~ enable_debug = false
+#~ datacenter = "cicd"
+#~ data_dir = "/srv/consul"
+#~ ui_config{
+#~ enabled = false
+#~ }
+#~ server = true
+#~ bind_addr = "127.0.0.1"
+#~ client_addr = "127.0.0.1"
+#~ advertise_addr = "127.0.0.1"
+#~ retry_join = ["localhost"]
+#~ bootstrap_expect = 0
+#~ encrypt = "katpv2wgyY5Za8bGAHh7+URaeLJWh4g+gK0GBjmvQXA="
+#~ EOF
+
+#~ sudo systemctl restart consul
+
+# Run Vault dev instance for tests
+sudo mkdir -p /home/vault /etc/systemd/system/vault.service.d
+sudo chown -R vault:vault /home/vault
+
+sudo tee /etc/systemd/system/vault.service.d/override.conf >/dev/null <<EOF
+[Service]
+ExecStart=
+ExecStart=/usr/bin/vault server -dev -dev-root-token-id root -dev-tls -dev-tls-cert-dir=/home/vault
+ProtectHome=no
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart vault
